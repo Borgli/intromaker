@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import shlex
 
+AUDIO_WAVEFORM_PATH = '/home/rune/Downloads/audiowaveform-1.1.0/build/audiowaveform'
+
 DOWNLOAD_FOLDER = '{}/downloads'.format(os.path.dirname(__file__))
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.mkdir(DOWNLOAD_FOLDER)
@@ -59,8 +61,17 @@ async def get_audio_from_link(websocket, data):
 
     temp_folder_path = "{}/{}".format(DOWNLOAD_FOLDER, temp_folder_name)
     file_name = os.listdir(temp_folder_path)[0]
-    with open("{}/{}".format(temp_folder_path, file_name), 'rb') as f:
+    file_path = "{}/{}".format(temp_folder_path, file_name)
+    with open(file_path, 'rb') as f:
         await websocket.send(f.read())
+
+    process = subprocess.Popen(shlex.split('{} -i {} -o {} -b 8'.format(AUDIO_WAVEFORM_PATH, shlex.quote(file_path),
+                                                                        shlex.quote(file_path + '.json'))))
+    process.wait()
+    with open(file_path + '.json', 'r') as f:
+        waveform_dict = json.load(f)
+        response = {'type': 'waveform', 'data': waveform_dict}
+        await websocket.send(json.dumps(response))
 
     shutil.rmtree(temp_folder_path)
 

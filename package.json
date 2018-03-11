@@ -1,0 +1,36 @@
+{
+  "name": "intromaker",
+  "version": "0.0.1",
+  "description": "Creates intros for the Discord bot Ohminator",
+  "main": "intromaker.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Borgli/intromaker.git"
+  },
+  "keywords": [
+    "intromaker",
+    "intros",
+    "audio",
+    "cutter"
+  ],
+  "author": "Rune Johan Borgli",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Borgli/intromaker/issues"
+  },
+  "homepage": "https://github.com/Borgli/intromaker#readme",
+  "dependencies": {
+    "peaks.js": "^0.9.8",
+    "react": "^16.2.0",
+    "react-dom": "^16.2.0",
+    "waveform-data": "^2.0.1"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.6.1",
+    "babel-preset-react": "^6.24.1"
+  }
+}

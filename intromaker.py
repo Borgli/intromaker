@@ -53,7 +53,8 @@ async def get_audio_from_link(websocket, data):
             'preferredcodec': 'mp3',
             'preferredquality': '192'
         }],
-        'outtmpl':  '{}/{}/%(title)s.%(ext)s'.format(DOWNLOAD_FOLDER, temp_folder_name)
+        'outtmpl':  '{}/{}/%(title)s.%(ext)s'.format(DOWNLOAD_FOLDER, temp_folder_name),
+        'default_search': 'auto'
     }
 
     with youtube_dl.YoutubeDL(ytdl_opts) as ytdl:
@@ -70,7 +71,7 @@ async def get_audio_from_link(websocket, data):
     process.wait()
     with open(file_path + '.json', 'r') as f:
         waveform_dict = json.load(f)
-        response = {'type': 'waveform', 'data': waveform_dict}
+        response = {'type': 'audio_data', 'data': {'waveform': waveform_dict, 'title': file_name[:-4]}}
         await websocket.send(json.dumps(response))
 
     shutil.rmtree(temp_folder_path)

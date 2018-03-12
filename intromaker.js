@@ -2,7 +2,7 @@ class AudioComponent extends React.Component {
   constructor(props) {
     super(props);
     this.props = props;
-    this.state = {'loading': true, 'data': null, 'waveform': null};
+    this.state = {'loading': true, 'data': null, 'waveform': null, 'title': null};
     this.ws = new WebSocket("ws://127.0.0.1:5678/");
 
     this.ws.onopen = (ev) => {
@@ -14,8 +14,8 @@ class AudioComponent extends React.Component {
         this.setState({'data': ev.data})
       } else {
         let data = JSON.parse(ev.data);
-        if (data.hasOwnProperty('type') && data['type'] === 'waveform') {
-          this.setState({'loading': false, 'waveform': data['data']})
+        if (data.hasOwnProperty('type') && data['type'] === 'audio_data') {
+          this.setState({'loading': false, 'waveform': data['data']['waveform'], 'title': data['data']['title']})
         }
       }
       /*let url = URL.createObjectURL(ev.data);
@@ -29,15 +29,73 @@ class AudioComponent extends React.Component {
   }
 
   render() {
+    if (this.state.loading) {
+      return <Loading/>;
+    } else {
+      return (
+        <PeaksComponent title={this.state.title} data={this.state.data} waveform={this.state.waveform}/>
+      );
+    }
+  }
+}
+
+class Peaks extends React.Component {
+  constructor(props) {
+    super(props);
+    /*ReactDOM.render(
+      <div className={"col"}>
+        <h1 className={"display-3"}>{this.props.title}</h1>
+        <div id={"peaks-container"}/>
+        <audio id={"audio"} controls={"controls"}>
+          <source src={URL.createObjectURL(this.props.data)} type={"audio/mp3"}/>
+          Your browser does not support the audio element.
+        </audio>
+      </div>,
+      document.getElementById("container")
+    );*/
+
+    ReactDOM.render(<source src={URL.createObjectURL(this.props.data)} type={"audio/mp3"}/>,
+      document.getElementById('audio'));
+
+
+  }
+
+  componentDidMount() {
+    this.myAudioContext = new AudioContext();
+
+    this.peaks = peaks.init({
+      container: document.getElementById('peaks-container'),
+      mediaElement: document.getElementById('audio'),
+      audioContext: this.myAudioContext
+    });
+  }
+
+  render() {
     return (
-      <div>
-        {this.state.loading && <Loading/>}
-        {!this.state.loading && <PeaksComponent data={this.state.data} waveform={this.state.waveform}/>}
-      </div>
+      null
     );
   }
 }
 
+function detectMouseWheelDirection( e )
+{
+    var delta = null,
+        direction = false
+    ;
+    if ( !e ) { // if the event is not provided, we get it from the window object
+        e = window.event;
+    }
+    if ( e.wheelDelta ) { // will work in most cases
+        delta = e.wheelDelta / 60;
+    } else if ( e.detail ) { // fallback for Firefox
+        delta = -e.detail / 2;
+    }
+    if ( delta !== null ) {
+        direction = delta > 0 ? 'up' : 'down';
+    }
+
+    return direction;
+}
 
 class PeaksComponent extends React.Component {
   constructor(props) {
@@ -47,13 +105,33 @@ class PeaksComponent extends React.Component {
       document.getElementById('audio')
     );
 
+    ReactDOM.render(
+      <h1 className={"display-3"}>{this.props.title}</h1>,
+      document.getElementById('title')
+    );
+
     var myAudioContext = new AudioContext();
 
-    this.peaks = peaks.init({
+    let instance = peaks.init({
       container: document.getElementById('peaks-container'),
       mediaElement: document.getElementById('audio'),
-      audioContext: myAudioContext
+      audioContext: myAudioContext,
+      zoomLevels: [512, 1024, 2048, 4096]
     });
+    /*
+    document.getElementById('audio').setAttribute('controls', 'controls');
+
+    document.getElementById('peaks-container').addEventListener('wheel', (ev) => {
+      console.log("scroll");
+      ev.preventDefault();
+      let direction = detectMouseWheelDirection(ev);
+      if (direction === 'down') {
+        instance.zoom.zoomOut();
+      } else if (direction === 'up') {
+        instance.zoom.zoomIn();
+      }
+    });
+    */
   }
 
 
@@ -61,7 +139,6 @@ class PeaksComponent extends React.Component {
     return (null);
   }
 }
-
 
 class VolumeBar extends React.Component {
   constructor(props) {

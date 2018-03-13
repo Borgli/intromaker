@@ -8,9 +8,9 @@ import shutil
 import subprocess
 import shlex
 
-AUDIO_WAVEFORM_PATH = '/home/rune/Downloads/audiowaveform-1.1.0/build/audiowaveform'
+AUDIO_WAVEFORM_PATH = os.path.abspath('audiowaveform-win64/audiowaveform.exe')
 
-DOWNLOAD_FOLDER = '{}/downloads'.format(os.path.dirname(__file__))
+DOWNLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'downloads')
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.mkdir(DOWNLOAD_FOLDER)
 
@@ -53,25 +53,30 @@ async def get_audio_from_link(websocket, data):
             'preferredcodec': 'mp3',
             'preferredquality': '192'
         }],
-        'outtmpl':  '{}/{}/%(title)s.%(ext)s'.format(DOWNLOAD_FOLDER, temp_folder_name),
+        'outtmpl':  os.path.join(os.path.join(DOWNLOAD_FOLDER, temp_folder_name), '%(title)s.%(ext)s'),
         'default_search': 'auto'
     }
 
     with youtube_dl.YoutubeDL(ytdl_opts) as ytdl:
         ytdl.download([link])
 
-    temp_folder_path = "{}/{}".format(DOWNLOAD_FOLDER, temp_folder_name)
+    # For some reason, ytdl converts ':' to '#' on windows.
+    # A special case then has to be made.
+    if temp_folder_name not in os.listdir(DOWNLOAD_FOLDER):
+        temp_folder_name = temp_folder_name.replace(':', '#')
+
+    temp_folder_path = os.path.join(DOWNLOAD_FOLDER, temp_folder_name)
     file_name = os.listdir(temp_folder_path)[0]
-    file_path = "{}/{}".format(temp_folder_path, file_name)
+    file_path = os.path.join(temp_folder_path, file_name)
     with open(file_path, 'rb') as f:
         await websocket.send(f.read())
 
-    process = subprocess.Popen(shlex.split('{} -i {} -o {} -b 8'.format(AUDIO_WAVEFORM_PATH, shlex.quote(file_path),
-                                                                        shlex.quote(file_path + '.json'))))
+    process = subprocess.Popen(shlex.split('{} -i {} -o {} -z 64 -b 8'.format(shlex.quote(AUDIO_WAVEFORM_PATH),
+                                                                              shlex.quote(file_path),
+                                                                              shlex.quote(file_path + '.json'))))
     process.wait()
     with open(file_path + '.json', 'r') as f:
-        waveform_dict = json.load(f)
-        response = {'type': 'audio_data', 'data': {'waveform': waveform_dict, 'title': file_name[:-4]}}
+        response = {'type': 'audio_data', 'data': {'waveform': json.load(f), 'title': file_name[:-4]}}
         await websocket.send(json.dumps(response))
 
     shutil.rmtree(temp_folder_path)
@@ -79,8 +84,8 @@ async def get_audio_from_link(websocket, data):
 
 async def cut_audio_from_link(websocket, data):
     link = data['link']
-    start_pos = shlex.quote(data['start_pos'])
-    end_pos = shlex.quote(data['end_pos'])
+    start_pos = shlex.quote(str(data['start_pos']))
+    end_pos = shlex.quote(str(data['end_pos']))
 
     temp_folder_name = "{}-{}".format("downloaded", datetime.datetime.now())
 
@@ -91,16 +96,21 @@ async def cut_audio_from_link(websocket, data):
             'preferredcodec': 'mp3',
             'preferredquality': '192'
         }],
-        'outtmpl': '{}/{}/%(title)s.%(ext)s'.format(DOWNLOAD_FOLDER, temp_folder_name)
+        'outtmpl': os.path.join(os.path.join(DOWNLOAD_FOLDER, temp_folder_name), '%(title)s.%(ext)s')
     }
 
     with youtube_dl.YoutubeDL(ytdl_opts) as ytdl:
         ytdl.download([link])
 
-    temp_folder_path = "{}/{}".format(DOWNLOAD_FOLDER, temp_folder_name)
+    # For some reason, ytdl converts ':' to '#' on windows.
+    # A special case then has to be made.
+    if temp_folder_name not in os.listdir(DOWNLOAD_FOLDER):
+        temp_folder_name = temp_folder_name.replace(':', '#')
+
+    temp_folder_path = os.path.join(DOWNLOAD_FOLDER, temp_folder_name)
     file_name = os.listdir(temp_folder_path)[0]
-    file_path = "{}/{}".format(temp_folder_path, file_name)
-    cut_file_path = "{}/cut-{}".format(temp_folder_path, file_name)
+    file_path = os.path.join(temp_folder_path, file_name)
+    cut_file_path = os.path.join(temp_folder_path, "cut-{}".format(file_name))
 
     # Cut audio file into desired parts
     process = subprocess.Popen(shlex.split('ffmpeg -i {} -ss {} -to {} {}'.format(shlex.quote(file_path), start_pos,

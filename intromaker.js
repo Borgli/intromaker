@@ -1,9 +1,11 @@
+WEBSOCKET_LOCATION = "ws://127.0.0.1:5678/";
+
 class AudioComponent extends React.Component {
   constructor(props) {
     super(props);
     this.props = props;
     this.state = {'loading': true, 'data': null, 'waveform': null, 'title': null};
-    this.ws = new WebSocket("ws://127.0.0.1:5678/");
+    this.ws = new WebSocket(WEBSOCKET_LOCATION);
 
     this.ws.onopen = (ev) => {
       this.ws.send(JSON.stringify({'type': 'get_audio', 'data': {'link': this.props.audioLink}}));
@@ -15,16 +17,13 @@ class AudioComponent extends React.Component {
       } else {
         let data = JSON.parse(ev.data);
         if (data.hasOwnProperty('type') && data['type'] === 'audio_data') {
-          this.setState({'loading': false, 'waveform': data['data']['waveform'], 'title': data['data']['title']})
+          this.setState({
+            'loading': false,
+            'waveform': JSON.stringify(data['data']['waveform']),
+            'title': data['data']['title']
+          })
         }
       }
-      /*let url = URL.createObjectURL(ev.data);
-      let sound = new Howl({
-        src: [url],
-        format: 'mp3'
-      });
-      sound.play();*/
-      //this.setState({'loading': false, 'data': ev.data})
     };
   }
 
@@ -33,47 +32,9 @@ class AudioComponent extends React.Component {
       return <Loading/>;
     } else {
       return (
-        <PeaksComponent title={this.state.title} data={this.state.data} waveform={this.state.waveform}/>
+        <PeaksComponent title={this.state.title} data={this.state.data} waveform={this.state.waveform} link={this.props.audioLink}/>
       );
     }
-  }
-}
-
-class Peaks extends React.Component {
-  constructor(props) {
-    super(props);
-    /*ReactDOM.render(
-      <div className={"col"}>
-        <h1 className={"display-3"}>{this.props.title}</h1>
-        <div id={"peaks-container"}/>
-        <audio id={"audio"} controls={"controls"}>
-          <source src={URL.createObjectURL(this.props.data)} type={"audio/mp3"}/>
-          Your browser does not support the audio element.
-        </audio>
-      </div>,
-      document.getElementById("container")
-    );*/
-
-    ReactDOM.render(<source src={URL.createObjectURL(this.props.data)} type={"audio/mp3"}/>,
-      document.getElementById('audio'));
-
-
-  }
-
-  componentDidMount() {
-    this.myAudioContext = new AudioContext();
-
-    this.peaks = peaks.init({
-      container: document.getElementById('peaks-container'),
-      mediaElement: document.getElementById('audio'),
-      audioContext: this.myAudioContext
-    });
-  }
-
-  render() {
-    return (
-      null
-    );
   }
 }
 
@@ -100,6 +61,7 @@ function detectMouseWheelDirection( e )
 class PeaksComponent extends React.Component {
   constructor(props) {
     super(props);
+    this.state = {'playing': false, segment: false, 'downloading': false};
     ReactDOM.render(
       <source src={URL.createObjectURL(this.props.data)} type={"audio/mp3"}/>,
       document.getElementById('audio')
@@ -110,19 +72,20 @@ class PeaksComponent extends React.Component {
       document.getElementById('title')
     );
 
-    var myAudioContext = new AudioContext();
-
     let instance = peaks.init({
       container: document.getElementById('peaks-container'),
       mediaElement: document.getElementById('audio'),
-      audioContext: myAudioContext,
-      zoomLevels: [512, 1024, 2048, 4096]
+      dataUri: URL.createObjectURL(new Blob([this.props.waveform], {type: 'application/json'})),
+      showPlayheadTime: true,
+      zoomLevels: [64, 128, 256, 512, 1024, 2048, 4096]
     });
-    /*
-    document.getElementById('audio').setAttribute('controls', 'controls');
+
+    this.instance = instance;
+    this.handlePlayButtonClick = this.handlePlayButtonClick.bind(this);
+    this.handleSegment = this.handleSegment.bind(this);
+    this.handleDownload = this.handleDownload.bind(this);
 
     document.getElementById('peaks-container').addEventListener('wheel', (ev) => {
-      console.log("scroll");
       ev.preventDefault();
       let direction = detectMouseWheelDirection(ev);
       if (direction === 'down') {
@@ -131,12 +94,81 @@ class PeaksComponent extends React.Component {
         instance.zoom.zoomIn();
       }
     });
-    */
+
+    let component = this;
+    document.getElementById('audio').addEventListener('pause', (ev) => {
+      component.setState({'playing': false})
+    });
   }
 
+  handlePlayButtonClick() {
+    if (this.state.playing) {
+        this.instance.player.pause();
+    } else {
+      if (this.state.segment) {
+        this.instance.player.playSegment(this.instance.segments.getSegment(1));
+      } else {
+        this.instance.player.play();
+      }
+    }
+    this.setState({'playing': !this.state.playing})
+  }
+
+  handleSegment() {
+    if (!this.state.segment) {
+      this.instance.segments.add({
+        'startTime': this.instance.player.getCurrentTime(),
+        'endTime': this.instance.player.getCurrentTime()+5,
+        'editable': true,
+        'color': '#007bff',
+        'labelText': 'Audio segment to download',
+        'id': 1
+      });
+    } else {
+      this.instance.segments.removeAll();
+    }
+    this.setState({segment: !this.state.segment})
+  }
+
+  handleDownload() {
+    if (this.state.segment) {
+      this.ws = new WebSocket(WEBSOCKET_LOCATION);
+
+      let segment = this.instance.segments.getSegment(1);
+
+      this.ws.onopen = (ev) => {
+        this.setState({'downloading': true});
+        this.ws.send(JSON.stringify({
+          'type': 'cut_audio',
+          'data': {'link': this.props.link, 'start_pos': segment.startTime, 'end_pos': segment.endTime}
+        }));
+      };
+
+      this.ws.onmessage = (ev) => {
+        this.setState({'downloading': false});
+        saveAs(ev.data, this.props.title + ".mp3")
+      };
+    } else {
+      saveAs(this.props.data, this.props.title + ".mp3")
+    }
+  }
 
   render() {
-    return (null);
+    return (
+      <div className={"row justify-content-md-center"}>
+        <div className={"col-6"}>
+          <div className={"row"}>
+            {this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-pause"}/></button>}
+            {!this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-play"}/></button>}
+            {this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-minus"}/>  Remove Segment</button>}
+            {!this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-plus"}/>  Insert Segment</button>}
+          </div>
+        </div>
+        <div className={"col"}>
+          <button type={"button"} onClick={!this.state.downloading ? this.handleDownload : null} className={"btn btn-primary btn-lg"} disabled={this.state.downloading}><i className={"fas fa-download"}/>{this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"}</button>
+        </div>
+      </div>
+    );
   }
 }
 
@@ -212,23 +244,6 @@ function JumbotronComponent(props) {
   );
 }
 
-
-function pass() {
-  let submit = document.getElementById('yt_submit');
-  let input_field = document.getElementById('input_field');
-  let start_pos = document.getElementById('start_pos');
-  let end_pos = document.getElementById('end_pos');
-  submit.onsubmit = function (ev) {
-    ev.preventDefault();
-    console.log(input_field.value);
-    if (start_pos.value === '') {
-      ws.send(JSON.stringify({'type': 'get_audio', 'data': {'link': input_field.value}}));
-    } else {
-      ws.send(JSON.stringify({'type': 'cut_audio', 'data': {'link': input_field.value, 'start_pos': start_pos.value, 'end_pos': end_pos.value}}));
-    }
-  }
-}
-
 function renderReact() {
   ReactDOM.render(
     <JumbotronComponent title={"Intromaker"} leadText={"Welcome to intromaker"} >
@@ -241,6 +256,5 @@ function renderReact() {
 function init() {
   renderReact();
 }
-
 
 document.addEventListener('DOMContentLoaded', init, false);

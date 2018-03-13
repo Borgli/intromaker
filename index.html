@@ -7,6 +7,9 @@
     <!-- Bootstrap 4 CSS -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
 
+    <!-- Font Awesome -->
+    <script defer src="https://use.fontawesome.com/releases/v5.0.8/js/all.js"></script>
+
     <!-- Bootstrap slider CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-slider/10.0.0/css/bootstrap-slider.min.css">
 
@@ -14,16 +17,20 @@
 
 </head>
 <body>
-    <div id="container"></div>
-    <div class="row">
-        <div class="col" id="title">
-        </div>
+    <div class="container-fluid">
+      <div class="row">
+          <div class="col" id="title">
+          </div>
+      </div>
+      <div class="row">
+          <div class="col mb-0">
+              <div id="peaks-container"></div>
+              <audio id="audio"></audio>
+          </div>
+      </div>
     </div>
-    <div class="row">
-        <div class="col">
-            <div id="peaks-container"></div>
-            <audio id="audio" style="width: 100vw"></audio>
-        </div>
+    <div class="container">
+      <div id="container"></div>
     </div>
 
     <!-- Javascript for Bootstrap 4 -->
@@ -46,6 +53,9 @@
 
     <!-- Waveform -->
     <script src="node_modules/peaks.js/peaks.js"></script>
+
+    <!-- Filesaver -->
+    <script src="node_modules/file-saver/FileSaver.min.js"></script>
 
     <script src="dist/intromaker.js"></script>
 </body>

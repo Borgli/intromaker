@@ -1,4 +1,4 @@
-const WEBSOCKET_LOCATION = "ws://138.68.146.133:5678/";
+const WEBSOCKET_LOCATION = "wss://intro.ohminator.com:8080/";
 
 class AudioComponent extends React.Component {
   constructor(props) {

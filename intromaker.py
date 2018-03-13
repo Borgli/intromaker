@@ -1,3 +1,5 @@
+import ssl
+
 import websockets
 import asyncio
 import json
@@ -8,7 +10,7 @@ import shutil
 import subprocess
 import shlex
 
-AUDIO_WAVEFORM_PATH = os.path.abspath('audiowaveform-win64/audiowaveform.exe')
+AUDIO_WAVEFORM_PATH = os.path.abspath('audiowaveform')
 
 DOWNLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'downloads')
 if not os.path.exists(DOWNLOAD_FOLDER):
@@ -123,7 +125,9 @@ async def cut_audio_from_link(websocket, data):
 
 
 def start_server():
-    server = websockets.serve(message_handler, '127.0.0.1', 5678)
+    ssl_cert = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ssl_cert.load_cert_chain("/etc/letsencrypt/live/intro.ohminator.com/fullchain.pem", keyfile="/etc/letsencrypt/live/intro.ohminator.com/privkey.pem")
+    server = websockets.serve(message_handler, '0.0.0.0', port=8080, ssl=ssl_cert)
     print("Starting web socket!")
     asyncio.get_event_loop().run_until_complete(server)
     asyncio.get_event_loop().run_forever()

@@ -50,6 +50,8 @@ function detectMouseWheelDirection( e )
         delta = e.wheelDelta / 60;
     } else if ( e.detail ) { // fallback for Firefox
         delta = -e.detail / 2;
+    } else if ( e.deltaY ) {
+        delta = -e.deltaY;
     }
     if ( delta !== null ) {
         direction = delta > 0 ? 'up' : 'down';
@@ -155,17 +157,19 @@ class PeaksComponent extends React.Component {
 
   render() {
     return (
-      <div className={"row justify-content-md-center"}>
-        <div className={"col-6"}>
-          <div className={"row"}>
-            {this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-pause"}/></button>}
-            {!this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-play"}/></button>}
-            {this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-minus"}/>  Remove Segment</button>}
-            {!this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-plus"}/>  Insert Segment</button>}
+      <div>
+        <div className={"row justify-content-md-center"}>
+          <div className={"col-6"}>
+            <div className={"row"}>
+              {this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-pause"}/></button>}
+              {!this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-play"}/></button>}
+              {this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-minus"}/>  Remove Segment</button>}
+              {!this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-plus"}/>  Insert Segment</button>}
+            </div>
           </div>
-        </div>
-        <div className={"col"}>
-          <button type={"button"} onClick={!this.state.downloading ? this.handleDownload : null} className={"btn btn-primary btn-lg"} disabled={this.state.downloading}><i className={"fas fa-download"}/>{this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"}</button>
+          <div className={"col"}>
+            <button type={"button"} onClick={!this.state.downloading ? this.handleDownload : null} className={"btn btn-primary btn-lg"} disabled={this.state.downloading}><i className={"fas fa-download"}/>{this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"}</button>
+          </div>
         </div>
       </div>
     );

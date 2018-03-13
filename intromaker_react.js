@@ -70,6 +70,8 @@ function detectMouseWheelDirection(e) {
   } else if (e.detail) {
     // fallback for Firefox
     delta = -e.detail / 2;
+  } else if (e.deltaY) {
+    delta = -e.deltaY;
   }
   if (delta !== null) {
     direction = delta > 0 ? 'up' : 'down';
@@ -187,45 +189,49 @@ var PeaksComponent = function (_React$Component2) {
     value: function render() {
       return React.createElement(
         'div',
-        { className: "row justify-content-md-center" },
+        null,
         React.createElement(
           'div',
-          { className: "col-6" },
+          { className: "row justify-content-md-center" },
           React.createElement(
             'div',
-            { className: "row" },
-            this.state.playing && React.createElement(
-              'button',
-              { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary btn-lg mr-3" },
-              React.createElement('i', { className: "fas fa-pause" })
-            ),
-            !this.state.playing && React.createElement(
-              'button',
-              { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary btn-lg mr-3" },
-              React.createElement('i', { className: "fas fa-play" })
-            ),
-            this.state.segment && React.createElement(
-              'button',
-              { type: "button", onClick: this.handleSegment, className: "btn btn-primary btn-lg" },
-              React.createElement('i', { className: "fas fa-minus" }),
-              '  Remove Segment'
-            ),
-            !this.state.segment && React.createElement(
-              'button',
-              { type: "button", onClick: this.handleSegment, className: "btn btn-primary btn-lg" },
-              React.createElement('i', { className: "fas fa-plus" }),
-              '  Insert Segment'
+            { className: "col-6" },
+            React.createElement(
+              'div',
+              { className: "row" },
+              this.state.playing && React.createElement(
+                'button',
+                { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary btn-lg mr-3" },
+                React.createElement('i', { className: "fas fa-pause" })
+              ),
+              !this.state.playing && React.createElement(
+                'button',
+                { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary btn-lg mr-3" },
+                React.createElement('i', { className: "fas fa-play" })
+              ),
+              this.state.segment && React.createElement(
+                'button',
+                { type: "button", onClick: this.handleSegment, className: "btn btn-primary btn-lg" },
+                React.createElement('i', { className: "fas fa-minus" }),
+                '  Remove Segment'
+              ),
+              !this.state.segment && React.createElement(
+                'button',
+                { type: "button", onClick: this.handleSegment, className: "btn btn-primary btn-lg" },
+                React.createElement('i', { className: "fas fa-plus" }),
+                '  Insert Segment'
+              )
             )
-          )
-        ),
-        React.createElement(
-          'div',
-          { className: "col" },
+          ),
           React.createElement(
-            'button',
-            { type: "button", onClick: !this.state.downloading ? this.handleDownload : null, className: "btn btn-primary btn-lg", disabled: this.state.downloading },
-            React.createElement('i', { className: "fas fa-download" }),
-            this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"
+            'div',
+            { className: "col" },
+            React.createElement(
+              'button',
+              { type: "button", onClick: !this.state.downloading ? this.handleDownload : null, className: "btn btn-primary btn-lg", disabled: this.state.downloading },
+              React.createElement('i', { className: "fas fa-download" }),
+              this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"
+            )
           )
         )
       );

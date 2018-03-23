@@ -10,6 +10,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 var WEBSOCKET_LOCATION = "wss://intro.ohminator.com:8080/";
 
+var Slider = ReactRangeslider.default;
+
 var AudioComponent = function (_React$Component) {
   _inherits(AudioComponent, _React$Component);
 
@@ -19,7 +21,7 @@ var AudioComponent = function (_React$Component) {
     var _this = _possibleConstructorReturn(this, (AudioComponent.__proto__ || Object.getPrototypeOf(AudioComponent)).call(this, props));
 
     _this.props = props;
-    _this.state = { 'loading': true, 'data': null, 'waveform': null, 'title': null };
+    _this.state = { 'loading': true, 'data': null, 'waveform': null, 'title': null, connected: true };
     _this.ws = new WebSocket(WEBSOCKET_LOCATION);
 
     _this.ws.onopen = function (ev) {
@@ -37,8 +39,13 @@ var AudioComponent = function (_React$Component) {
             'waveform': JSON.stringify(data['data']['waveform']),
             'title': data['data']['title']
           });
+          _this.ws.close(1000, "Transaction completed.");
         }
       }
+    };
+
+    _this.ws.onerror = function (ev) {
+      _this.setState({ 'connected': false });
     };
     return _this;
   }
@@ -46,8 +53,10 @@ var AudioComponent = function (_React$Component) {
   _createClass(AudioComponent, [{
     key: 'render',
     value: function render() {
-      if (this.state.loading) {
+      if (this.state.loading && this.state.connected) {
         return React.createElement(Loading, null);
+      } else if (this.state.loading && !this.state.connected) {
+        return React.createElement(NoConnectionLoadingNotification, null);
       } else {
         return React.createElement(PeaksComponent, { title: this.state.title, data: this.state.data, waveform: this.state.waveform, link: this.props.audioLink });
       }
@@ -56,6 +65,43 @@ var AudioComponent = function (_React$Component) {
 
   return AudioComponent;
 }(React.Component);
+
+function NoConnectionLoadingNotification(props) {
+  return React.createElement(
+    'div',
+    { className: "overlay" },
+    React.createElement(
+      'div',
+      { className: "container" },
+      React.createElement(
+        'div',
+        { className: "alert alert-secondary", role: "alert" },
+        React.createElement(
+          'h4',
+          { className: "alert-heading" },
+          'Ooops!'
+        ),
+        React.createElement(
+          'p',
+          null,
+          React.createElement(
+            'strong',
+            null,
+            'Could not connect to the server.'
+          ),
+          React.createElement('br', null),
+          'This could be because of your Internet connection, the server is down or the server is too busy to handle your request.'
+        ),
+        React.createElement('hr', null),
+        React.createElement(
+          'p',
+          { className: "mb-0" },
+          'Please try again. If the problem persists, please notify the developer or wait until the problem is fixed.'
+        )
+      )
+    )
+  );
+}
 
 function detectMouseWheelDirection(e) {
   var delta = null,
@@ -76,7 +122,6 @@ function detectMouseWheelDirection(e) {
   if (delta !== null) {
     direction = delta > 0 ? 'up' : 'down';
   }
-
   return direction;
 }
 
@@ -88,7 +133,7 @@ var PeaksComponent = function (_React$Component2) {
 
     var _this2 = _possibleConstructorReturn(this, (PeaksComponent.__proto__ || Object.getPrototypeOf(PeaksComponent)).call(this, props));
 
-    _this2.state = { 'playing': false, segment: false, 'downloading': false };
+    _this2.state = { 'playing': false, segment: false, 'downloading': false, volume: 0, 'error_connecting': false };
     ReactDOM.render(React.createElement('source', { src: URL.createObjectURL(_this2.props.data), type: "audio/mp3" }), document.getElementById('audio'));
 
     ReactDOM.render(React.createElement(
@@ -96,6 +141,8 @@ var PeaksComponent = function (_React$Component2) {
       { className: "display-3" },
       _this2.props.title
     ), document.getElementById('title'));
+
+    _this2.audioCtx = new AudioContext();
 
     var instance = peaks.init({
       container: document.getElementById('peaks-container'),
@@ -106,9 +153,18 @@ var PeaksComponent = function (_React$Component2) {
     });
 
     _this2.instance = instance;
+    _this2.source = _this2.audioCtx.createMediaElementSource(_this2.instance.player._mediaElement);
+    _this2.gainNode = _this2.audioCtx.createGain();
+    _this2.source.connect(_this2.gainNode);
+
+    // connect the gain node to an output destination
+    _this2.gainNode.connect(_this2.audioCtx.destination);
+
     _this2.handlePlayButtonClick = _this2.handlePlayButtonClick.bind(_this2);
     _this2.handleSegment = _this2.handleSegment.bind(_this2);
     _this2.handleDownload = _this2.handleDownload.bind(_this2);
+    _this2.handleVolumeChange = _this2.handleVolumeChange.bind(_this2);
+    //this.handleSegmentChange = this.handleSegmentChange.bind(this);
 
     document.getElementById('peaks-container').addEventListener('wheel', function (ev) {
       ev.preventDefault();
@@ -163,61 +219,134 @@ var PeaksComponent = function (_React$Component2) {
     value: function handleDownload() {
       var _this3 = this;
 
-      if (this.state.segment) {
+      if (this.state.segment || this.state.volume) {
         this.ws = new WebSocket(WEBSOCKET_LOCATION);
-
-        var segment = this.instance.segments.getSegment(1);
 
         this.ws.onopen = function (ev) {
           _this3.setState({ 'downloading': true });
-          _this3.ws.send(JSON.stringify({
-            'type': 'cut_audio',
-            'data': { 'link': _this3.props.link, 'start_pos': segment.startTime, 'end_pos': segment.endTime }
-          }));
+          if (_this3.state.segment) {
+            var segment = _this3.instance.segments.getSegment(1);
+            _this3.ws.send(JSON.stringify({
+              'type': 'cut_audio',
+              'data': {
+                'link': _this3.props.link,
+                'start_pos': segment.startTime,
+                'end_pos': segment.endTime,
+                'volume': _this3.precisionRound(1 + _this3.state.volume / 100, 1)
+              }
+            }));
+          } else {
+            _this3.ws.send(JSON.stringify({
+              'type': 'cut_audio',
+              'data': {
+                'link': _this3.props.link,
+                'start_pos': 0,
+                'end_pos': _this3.precisionRound(document.getElementById("audio").duration, 1),
+                'volume': _this3.precisionRound(1 + _this3.state.volume / 100, 1)
+              }
+            }));
+          }
         };
 
         this.ws.onmessage = function (ev) {
           _this3.setState({ 'downloading': false });
-          saveAs(ev.data, _this3.props.title + ".mp3");
+          if (ev.data instanceof Blob) {
+            saveAs(ev.data, _this3.props.title + ".mp3");
+          } else {
+            ReactDOM.render(React.createElement(DownloadingNotification, { message: [React.createElement(
+                'strong',
+                { key: "de" },
+                'Download error!'
+              ), " Something went wrong while downloading. Please notify the developer or wait for a fix. Deleting your browser's cache for this site could also help."] }), document.getElementById("notifications"));
+          }
+          _this3.ws.close(1000, "Finished downloading.");
+        };
+
+        this.ws.onerror = function (ev) {
+          ReactDOM.render(React.createElement(DownloadingNotification, { message: [React.createElement(
+              'strong',
+              { key: "nc" },
+              'No connection!'
+            ), " Please try again later, notify the developer or wait for it to be fixed."] }), document.getElementById("notifications"));
         };
       } else {
         saveAs(this.props.data, this.props.title + ".mp3");
       }
     }
   }, {
+    key: 'precisionRound',
+    value: function precisionRound(number, precision) {
+      var factor = Math.pow(10, precision);
+      return Math.round(number * factor) / factor;
+    }
+  }, {
+    key: 'handleVolumeChange',
+    value: function handleVolumeChange(value) {
+      this.gainNode.gain.value = this.precisionRound(1 + value / 100, 1);
+      this.setState({ 'volume': value });
+    }
+
+    /*
+    handleSegmentChange(ev, type) {
+      let startTime = 0, endTime = 0;
+      let startInput = document.getElementById('start_pos');
+        if (this.state.segment) {
+        let segment = this.instance.segments.getSegment(1);
+        if (type === 'start') {
+          startTime =
+        }
+        this.instance.segments.removeAll();
+      }
+      this.instance.player.getCurrentTime()+5
+      this.instance.segments.add({
+        'startTime': startTime,
+        'endTime': endTime,
+        'editable': true,
+        'color': '#007bff',
+        'labelText': 'Audio segment to download',
+        'id': 1
+      });
+    }
+    */
+
+  }, {
     key: 'render',
     value: function render() {
+      var _this4 = this;
+
       return React.createElement(
         'div',
         null,
         React.createElement(
           'div',
-          { className: "row justify-content-md-center" },
+          { className: "row justify-content-md-center mt-1" },
           React.createElement(
             'div',
-            { className: "col-6" },
+            { className: "col" },
             React.createElement(
               'div',
               { className: "row" },
               this.state.playing && React.createElement(
                 'button',
-                { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary btn-lg mr-3" },
-                React.createElement('i', { className: "fas fa-pause" })
+                { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary mr-3" },
+                React.createElement('i', { className: "fas fa-pause" }),
+                '  Pause'
               ),
               !this.state.playing && React.createElement(
                 'button',
-                { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary btn-lg mr-3" },
-                React.createElement('i', { className: "fas fa-play" })
+                { type: "button", onClick: this.handlePlayButtonClick, className: "btn btn-primary mr-3" },
+                React.createElement('i', { className: "fas fa-play" }),
+                '  Play'
               ),
               this.state.segment && React.createElement(
                 'button',
-                { type: "button", onClick: this.handleSegment, className: "btn btn-primary btn-lg" },
+                { type: "button", onClick: this.handleSegment, className: "btn btn-primary" },
                 React.createElement('i', { className: "fas fa-minus" }),
                 '  Remove Segment'
               ),
               !this.state.segment && React.createElement(
                 'button',
-                { type: "button", onClick: this.handleSegment, className: "btn btn-primary btn-lg" },
+                { type: "button", onClick: this.handleSegment, className: "btn btn-primary" },
                 React.createElement('i', { className: "fas fa-plus" }),
                 '  Insert Segment'
               )
@@ -226,14 +355,54 @@ var PeaksComponent = function (_React$Component2) {
           React.createElement(
             'div',
             { className: "col" },
+            React.createElement(Slider, { min: -100, max: 200, value: this.state.volume, onChange: this.handleVolumeChange, format: function format(value) {
+                return value + '%';
+              } })
+          ),
+          false && React.createElement(
+            'div',
+            { className: "col" },
+            React.createElement(
+              'div',
+              { className: "input-group" },
+              React.createElement(
+                'div',
+                { className: "input-group-prepend" },
+                React.createElement(
+                  'span',
+                  { className: "input-group-text" },
+                  'Start'
+                )
+              ),
+              React.createElement('input', { type: "text", className: "form-control", id: "start_pos", onChange: function onChange(ev) {
+                  _this4.handleSegmentChange(ev, 'start');
+                } }),
+              React.createElement('input', { type: "text", className: "form-control", id: "end_pos", onChange: function onChange(ev) {
+                  _this4.handleSegmentChange(ev, 'end');
+                } }),
+              React.createElement(
+                'div',
+                { className: "input-group-append" },
+                React.createElement(
+                  'span',
+                  { className: "input-group-text" },
+                  'End'
+                )
+              )
+            )
+          ),
+          React.createElement(
+            'div',
+            { className: "col" },
             React.createElement(
               'button',
-              { type: "button", onClick: !this.state.downloading ? this.handleDownload : null, className: "btn btn-primary btn-lg", disabled: this.state.downloading },
+              { type: "button", onClick: !this.state.downloading ? this.handleDownload : null, className: "btn btn-primary", disabled: this.state.downloading },
               React.createElement('i', { className: "fas fa-download" }),
               this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"
             )
           )
-        )
+        ),
+        React.createElement('div', { className: "row", id: "notifications" })
       );
     }
   }]);
@@ -241,33 +410,38 @@ var PeaksComponent = function (_React$Component2) {
   return PeaksComponent;
 }(React.Component);
 
-var VolumeBar = function (_React$Component3) {
-  _inherits(VolumeBar, _React$Component3);
+var DownloadingNotification = function (_React$Component3) {
+  _inherits(DownloadingNotification, _React$Component3);
 
-  function VolumeBar(props) {
-    _classCallCheck(this, VolumeBar);
+  function DownloadingNotification(props) {
+    _classCallCheck(this, DownloadingNotification);
 
-    return _possibleConstructorReturn(this, (VolumeBar.__proto__ || Object.getPrototypeOf(VolumeBar)).call(this, props));
+    return _possibleConstructorReturn(this, (DownloadingNotification.__proto__ || Object.getPrototypeOf(DownloadingNotification)).call(this, props));
   }
 
-  _createClass(VolumeBar, [{
-    key: 'componentDidMount',
-    value: function componentDidMount() {
-      this.slider = new Slider("#volume", { reversed: true });
-    }
-  }, {
+  _createClass(DownloadingNotification, [{
     key: 'render',
     value: function render() {
       return React.createElement(
         'div',
-        null,
-        React.createElement('input', { id: 'volume', type: "text", 'data-slider-min': "-5", 'data-slider-max': "20", 'data-slider-step': "1",
-          'data-slider-value': "-3", 'data-slider-orientation': "vertical" })
+        { className: 'alert alert-danger alert-dismissible fade show', role: 'alert' },
+        this.props.message,
+        React.createElement(
+          'button',
+          { type: 'button', className: 'close', onClick: function onClick(ev) {
+              ReactDOM.unmountComponentAtNode(document.getElementById('notifications'));
+            }, 'aria-label': 'Close', id: "noConnection" },
+          React.createElement(
+            'span',
+            { 'aria-hidden': 'true' },
+            '\xD7'
+          )
+        )
       );
     }
   }]);
 
-  return VolumeBar;
+  return DownloadingNotification;
 }(React.Component);
 
 function Loading(props) {
@@ -347,7 +521,7 @@ function JumbotronComponent(props) {
   );
 }
 
-function renderReact() {
+function renderStartPage() {
   ReactDOM.render(React.createElement(
     JumbotronComponent,
     { title: "Intromaker", leadText: "Welcome to intromaker" },
@@ -356,7 +530,7 @@ function renderReact() {
 }
 
 function init() {
-  renderReact();
+  renderStartPage();
 }
 
 document.addEventListener('DOMContentLoaded', init, false);

@@ -1,5 +1,7 @@
 const WEBSOCKET_LOCATION = "wss://intro.ohminator.com:8080/";
 
+const Slider = ReactRangeslider.default;
+
 class AudioComponent extends React.Component {
   constructor(props) {
     super(props);
@@ -63,7 +65,7 @@ function detectMouseWheelDirection( e )
 class PeaksComponent extends React.Component {
   constructor(props) {
     super(props);
-    this.state = {'playing': false, segment: false, 'downloading': false};
+    this.state = {'playing': false, segment: false, 'downloading': false, volume: 0, 'error_connecting': false};
     ReactDOM.render(
       <source src={URL.createObjectURL(this.props.data)} type={"audio/mp3"}/>,
       document.getElementById('audio')
@@ -74,6 +76,8 @@ class PeaksComponent extends React.Component {
       document.getElementById('title')
     );
 
+    this.audioCtx = new AudioContext();
+
     let instance = peaks.init({
       container: document.getElementById('peaks-container'),
       mediaElement: document.getElementById('audio'),
@@ -83,9 +87,18 @@ class PeaksComponent extends React.Component {
     });
 
     this.instance = instance;
+    this.source = this.audioCtx.createMediaElementSource(this.instance.player._mediaElement);
+    this.gainNode = this.audioCtx.createGain();
+    this.source.connect(this.gainNode);
+
+    // connect the gain node to an output destination
+    this.gainNode.connect(this.audioCtx.destination);
+
     this.handlePlayButtonClick = this.handlePlayButtonClick.bind(this);
     this.handleSegment = this.handleSegment.bind(this);
     this.handleDownload = this.handleDownload.bind(this);
+    this.handleVolumeChange = this.handleVolumeChange.bind(this);
+    //this.handleSegmentChange = this.handleSegmentChange.bind(this);
 
     document.getElementById('peaks-container').addEventListener('wheel', (ev) => {
       ev.preventDefault();
@@ -133,17 +146,33 @@ class PeaksComponent extends React.Component {
   }
 
   handleDownload() {
-    if (this.state.segment) {
+    if (this.state.segment || this.state.volume) {
       this.ws = new WebSocket(WEBSOCKET_LOCATION);
-
-      let segment = this.instance.segments.getSegment(1);
 
       this.ws.onopen = (ev) => {
         this.setState({'downloading': true});
-        this.ws.send(JSON.stringify({
-          'type': 'cut_audio',
-          'data': {'link': this.props.link, 'start_pos': segment.startTime, 'end_pos': segment.endTime}
-        }));
+        if (this.state.segment) {
+          let segment = this.instance.segments.getSegment(1);
+          this.ws.send(JSON.stringify({
+            'type': 'cut_audio',
+            'data': {
+              'link': this.props.link,
+              'start_pos': segment.startTime,
+              'end_pos': segment.endTime,
+              'volume': this.precisionRound(1 + (this.state.volume / 100), 1)
+            }
+          }));
+        } else {
+          this.ws.send(JSON.stringify({
+            'type': 'cut_audio',
+            'data': {
+              'link': this.props.link,
+              'start_pos': 0,
+              'end_pos': this.precisionRound(document.getElementById("audio").duration, 1),
+              'volume': this.precisionRound(1 + (this.state.volume / 100), 1)
+            }
+          }));
+        }
       };
 
       this.ws.onmessage = (ev) => {
@@ -155,20 +184,75 @@ class PeaksComponent extends React.Component {
     }
   }
 
+  precisionRound(number, precision) {
+    let factor = Math.pow(10, precision);
+    return Math.round(number * factor) / factor;
+  }
+
+  handleVolumeChange(value) {
+    this.gainNode.gain.value = this.precisionRound(1 + (value/100), 1);
+    this.setState({'volume': value})
+  }
+
+  /*
+  handleSegmentChange(ev, type) {
+    let startTime = 0, endTime = 0;
+    let startInput = document.getElementById('start_pos');
+
+    if (this.state.segment) {
+      let segment = this.instance.segments.getSegment(1);
+      if (type === 'start') {
+        startTime =
+      }
+      this.instance.segments.removeAll();
+    }
+    this.instance.player.getCurrentTime()+5
+    this.instance.segments.add({
+      'startTime': startTime,
+      'endTime': endTime,
+      'editable': true,
+      'color': '#007bff',
+      'labelText': 'Audio segment to download',
+      'id': 1
+    });
+  }
+  */
+
   render() {
     return (
       <div>
-        <div className={"row justify-content-md-center"}>
-          <div className={"col-6"}>
+        <div className={"row justify-content-md-center mt-1"}>
+          <div className={"col"}>
             <div className={"row"}>
-              {this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-pause"}/></button>}
-              {!this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary btn-lg mr-3"}><i className={"fas fa-play"}/></button>}
-              {this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-minus"}/>  Remove Segment</button>}
-              {!this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary btn-lg"}><i className={"fas fa-plus"}/>  Insert Segment</button>}
+              {this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary mr-3"}><i className={"fas fa-pause"}/>  Pause</button>}
+              {!this.state.playing && <button type={"button"} onClick={this.handlePlayButtonClick} className={"btn btn-primary mr-3"}><i className={"fas fa-play"}/>  Play</button>}
+              {this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary"}><i className={"fas fa-minus"}/>  Remove Segment</button>}
+              {!this.state.segment && <button type={"button"} onClick={this.handleSegment} className={"btn btn-primary"}><i className={"fas fa-plus"}/>  Insert Segment</button>}
             </div>
           </div>
           <div className={"col"}>
-            <button type={"button"} onClick={!this.state.downloading ? this.handleDownload : null} className={"btn btn-primary btn-lg"} disabled={this.state.downloading}><i className={"fas fa-download"}/>{this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"}</button>
+            <Slider min={-100} max={200} value={this.state.volume} onChange={this.handleVolumeChange} format={(value) => {return value + '%'}}/>
+          </div>
+          { false &&
+            <div className={"col"}>
+              <div className={"input-group"}>
+                <div className={"input-group-prepend"}>
+                  <span className={"input-group-text"}>Start</span>
+                </div>
+                <input type={"text"} className={"form-control"} id={"start_pos"} onChange={(ev) => {
+                  this.handleSegmentChange(ev, 'start')
+                }}/>
+                <input type={"text"} className={"form-control"} id={"end_pos"} onChange={(ev) => {
+                  this.handleSegmentChange(ev, 'end')
+                }}/>
+                <div className={"input-group-append"}>
+                  <span className={"input-group-text"}>End</span>
+                </div>
+              </div>
+            </div>
+          }
+          <div className={"col"}>
+            <button type={"button"} onClick={!this.state.downloading ? this.handleDownload : null} className={"btn btn-primary"} disabled={this.state.downloading}><i className={"fas fa-download"}/>{this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"}</button>
           </div>
         </div>
       </div>

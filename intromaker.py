@@ -44,7 +44,11 @@ async def message_handler(websocket, path):
 
 
 async def get_audio_from_link(websocket, data):
-    link = data['link']
+    try:
+        link = data['link']
+    except ValueError:
+        await websocket.send(json.dumps(create_error_message('Data is missing fields')))
+        return
 
     temp_folder_name = "{}-{}".format("downloaded", datetime.datetime.now())
 
@@ -85,9 +89,14 @@ async def get_audio_from_link(websocket, data):
 
 
 async def cut_audio_from_link(websocket, data):
-    link = data['link']
-    start_pos = shlex.quote(str(data['start_pos']))
-    end_pos = shlex.quote(str(data['end_pos']))
+    try:
+        link = data['link']
+        start_pos = shlex.quote(str(data['start_pos']))
+        end_pos = shlex.quote(str(data['end_pos']))
+        volume = shlex.quote(str(data['volume']))
+    except ValueError:
+        await websocket.send(json.dumps(create_error_message('Data is missing fields')))
+        return
 
     temp_folder_name = "{}-{}".format("downloaded", datetime.datetime.now())
 
@@ -98,7 +107,8 @@ async def cut_audio_from_link(websocket, data):
             'preferredcodec': 'mp3',
             'preferredquality': '192'
         }],
-        'outtmpl': os.path.join(os.path.join(DOWNLOAD_FOLDER, temp_folder_name), '%(title)s.%(ext)s')
+        'outtmpl': os.path.join(os.path.join(DOWNLOAD_FOLDER, temp_folder_name), '%(title)s.%(ext)s'),
+        'default_search': 'auto'
     }
 
     with youtube_dl.YoutubeDL(ytdl_opts) as ytdl:
@@ -114,9 +124,12 @@ async def cut_audio_from_link(websocket, data):
     file_path = os.path.join(temp_folder_path, file_name)
     cut_file_path = os.path.join(temp_folder_path, "cut-{}".format(file_name))
 
+    ffmpeg_call = 'ffmpeg -i {} -ss {} -to {} -filter:a "volume={}" {}'.format(shlex.quote(file_path), start_pos,
+                                                                               end_pos, volume,
+                                                                               shlex.quote(cut_file_path))
+
     # Cut audio file into desired parts
-    process = subprocess.Popen(shlex.split('ffmpeg -i {} -ss {} -to {} {}'.format(shlex.quote(file_path), start_pos,
-                                                                                  end_pos, shlex.quote(cut_file_path))))
+    process = subprocess.Popen(shlex.split(ffmpeg_call))
     process.wait()
     with open(cut_file_path, 'rb') as f:
         await websocket.send(f.read())
@@ -125,8 +138,9 @@ async def cut_audio_from_link(websocket, data):
 
 
 def start_server():
-    ssl_cert = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ssl_cert.load_cert_chain("/etc/letsencrypt/live/intro.ohminator.com/fullchain.pem", keyfile="/etc/letsencrypt/live/intro.ohminator.com/privkey.pem")
+    ssl_cert = ssl.SSLContext()
+    ssl_cert.load_cert_chain("/etc/letsencrypt/live/intro.ohminator.com/fullchain.pem",
+                             keyfile="/etc/letsencrypt/live/intro.ohminator.com/privkey.pem")
     server = websockets.serve(message_handler, '0.0.0.0', port=8080, ssl=ssl_cert)
     print("Starting web socket!")
     asyncio.get_event_loop().run_until_complete(server)

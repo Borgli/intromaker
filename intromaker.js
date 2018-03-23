@@ -6,7 +6,7 @@ class AudioComponent extends React.Component {
   constructor(props) {
     super(props);
     this.props = props;
-    this.state = {'loading': true, 'data': null, 'waveform': null, 'title': null};
+    this.state = {'loading': true, 'data': null, 'waveform': null, 'title': null, connected: true};
     this.ws = new WebSocket(WEBSOCKET_LOCATION);
 
     this.ws.onopen = (ev) => {
@@ -23,15 +23,22 @@ class AudioComponent extends React.Component {
             'loading': false,
             'waveform': JSON.stringify(data['data']['waveform']),
             'title': data['data']['title']
-          })
+          });
+          this.ws.close(1000, "Transaction completed.")
         }
       }
+    };
+
+    this.ws.onerror = (ev) => {
+      this.setState({'connected': false})
     };
   }
 
   render() {
-    if (this.state.loading) {
+    if (this.state.loading && this.state.connected) {
       return <Loading/>;
+    } else if (this.state.loading && !this.state.connected) {
+      return <NoConnectionLoadingNotification/>;
     } else {
       return (
         <PeaksComponent title={this.state.title} data={this.state.data} waveform={this.state.waveform} link={this.props.audioLink}/>
@@ -40,25 +47,39 @@ class AudioComponent extends React.Component {
   }
 }
 
-function detectMouseWheelDirection( e )
-{
-    var delta = null,
-        direction = false
-    ;
-    if ( !e ) { // if the event is not provided, we get it from the window object
+function NoConnectionLoadingNotification(props) {
+  return (
+    <div className={"overlay"}>
+      <div className={"container"}>
+        <div className={"alert alert-secondary"} role={"alert"}>
+          <h4 className={"alert-heading"}>Ooops!</h4>
+          <p><strong>Could not connect to the server.</strong><br/>
+            This could be because of your Internet connection,
+            the server is down or the server is too busy to handle your request.</p>
+          <hr/>
+          <p className={"mb-0"}>Please try again. If the problem persists, please notify the
+            developer or wait until the problem is fixed.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function detectMouseWheelDirection(e) {
+    let delta = null, direction = false;
+    if (!e) { // if the event is not provided, we get it from the window object
         e = window.event;
     }
-    if ( e.wheelDelta ) { // will work in most cases
+    if (e.wheelDelta) { // will work in most cases
         delta = e.wheelDelta / 60;
-    } else if ( e.detail ) { // fallback for Firefox
+    } else if (e.detail) { // fallback for Firefox
         delta = -e.detail / 2;
-    } else if ( e.deltaY ) {
+    } else if (e.deltaY) {
         delta = -e.deltaY;
     }
-    if ( delta !== null ) {
+    if (delta !== null) {
         direction = delta > 0 ? 'up' : 'down';
     }
-
     return direction;
 }
 
@@ -177,10 +198,25 @@ class PeaksComponent extends React.Component {
 
       this.ws.onmessage = (ev) => {
         this.setState({'downloading': false});
-        saveAs(ev.data, this.props.title + ".mp3")
+        if (ev.data instanceof Blob) {
+          saveAs(ev.data, this.props.title + ".mp3")
+        } else {
+          ReactDOM.render(
+            <DownloadingNotification message={[<strong key={"de"}>Download error!</strong>, " Something went wrong while downloading. Please notify the developer or wait for a fix. Deleting your browser's cache for this site could also help."]}/>,
+            document.getElementById("notifications")
+          );
+        }
+        this.ws.close(1000, "Finished downloading.")
       };
+
+      this.ws.onerror = (ev) => {
+        ReactDOM.render(
+          <DownloadingNotification message={[<strong key={"nc"}>No connection!</strong>, " Please try again later, notify the developer or wait for it to be fixed."]}/>,
+          document.getElementById("notifications")
+        );
+      }
     } else {
-      saveAs(this.props.data, this.props.title + ".mp3")
+      saveAs(this.props.data, this.props.title + ".mp3");
     }
   }
 
@@ -255,25 +291,24 @@ class PeaksComponent extends React.Component {
             <button type={"button"} onClick={!this.state.downloading ? this.handleDownload : null} className={"btn btn-primary"} disabled={this.state.downloading}><i className={"fas fa-download"}/>{this.state.downloading ? "  Downloading..." : this.state.segment ? "  Download Segment" : "  Download Whole Audio"}</button>
           </div>
         </div>
+        <div className={"row"} id={"notifications"}/>
       </div>
     );
   }
 }
 
-class VolumeBar extends React.Component {
+class DownloadingNotification extends React.Component {
   constructor(props) {
     super(props);
   }
 
-  componentDidMount() {
-    this.slider = new Slider("#volume", {reversed: true})
-  }
-
   render() {
     return (
-      <div>
-        <input id="volume" type={"text"} data-slider-min={"-5"} data-slider-max={"20"} data-slider-step={"1"}
-               data-slider-value={"-3"} data-slider-orientation={"vertical"}/>
+      <div className="alert alert-danger alert-dismissible fade show" role="alert">
+        {this.props.message}
+        <button type="button" className="close" onClick={(ev) => {ReactDOM.unmountComponentAtNode(document.getElementById('notifications'))}} aria-label="Close" id={"noConnection"}>
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
     );
   }
@@ -306,7 +341,6 @@ function submit() {
   );
 }
 
-
 function PickAudioComponent(props) {
   return(
     <div>
@@ -332,9 +366,9 @@ function JumbotronComponent(props) {
   );
 }
 
-function renderReact() {
+function renderStartPage() {
   ReactDOM.render(
-    <JumbotronComponent title={"Intromaker"} leadText={"Welcome to intromaker"} >
+    <JumbotronComponent title={"Intromaker"} leadText={"Welcome to intromaker"}>
       <PickAudioComponent subText={"Drag and drop a link to type into the box below"}/>
     </JumbotronComponent>,
     document.getElementById('container')
@@ -342,7 +376,7 @@ function renderReact() {
 }
 
 function init() {
-  renderReact();
+  renderStartPage();
 }
 
 document.addEventListener('DOMContentLoaded', init, false);

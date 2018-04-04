@@ -525,7 +525,7 @@ function renderStartPage() {
   ReactDOM.render(React.createElement(
     JumbotronComponent,
     { title: "Intromaker", leadText: "Welcome to intromaker" },
-    React.createElement(PickAudioComponent, { subText: "Drag and drop a link to type into the box below" })
+    React.createElement(PickAudioComponent, { subText: "Type an audio link or search term into the box below" })
   ), document.getElementById('container'));
 }
 

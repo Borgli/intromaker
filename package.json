@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/Borgli/intromaker#readme",
   "dependencies": {
+    "randomatic": ">=3.0.0",
     "file-saver": "^1.3.3",
     "peaks.js": "^0.9.8",
     "react": "^16.2.0",
